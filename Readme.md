@@ -15,12 +15,25 @@ It has the following features:
   message.
 - it is entirely written in inferno limbo, the binary should run on all
   inferno dis machines.
+- you can scroll with keys (inside the message entry box, hit keys up/down)
+- you can enter additional commands (see below)
 
-Furthermore it should also work on mobile inferno installations like [the one
-of bhgv](https://github.com/bhgv/Inferno-OS_Android) (no experience yet).
+Furthermore it works on mobile inferno installations like [the one
+of bhgv](https://github.com/bhgv/Inferno-OS_Android). You may need to adjust
+font and scaling.
 
 Please note that **this is an unofficial application. It's created by a user
 of hubfs chat, not by the creators or maintainers of hubfs chat.**
+
+Commands
+--------
+
+- `/j[oin] <chat>` (Not implemented yet).
+- `/c[onfig]` print current configuration.
+- `/aj [0|1]` or `/autoj[ump] [0|1]` prevents scrolling after messages. Good
+  for reading the history. Without the optional argument the feature is
+  toggled.
+- `/part [message]` prints a part message. This does _not_ leave the chat!
 
 License
 =======

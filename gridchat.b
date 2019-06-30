@@ -5,8 +5,6 @@ include "sys.m";
 	sprint: import sys;
 include "arg.m";
 include "draw.m";
-include "sh.m";
-	sh: Sh;
 include "dial.m";
 	dial: Dial;
 include "tk.m";
@@ -14,6 +12,15 @@ include "tk.m";
 include "tkclient.m";
 	tkclient: Tkclient;
 include "keyboard.m";
+include "string.m";
+	str: String;
+
+Cs: module
+{
+	init: fn(ctxt: ref Draw->Context, args: list of string);
+	PATH: con "/dis/ndb/cs.dis";
+};
+	cs: Cs;
 
 t: ref Tk->Toplevel;
 wmctl: chan of string;
@@ -25,6 +32,9 @@ filename := "/tmp/test";
 nick := "nickname";
 verbose := 0;
 dowarn := 0;
+autojump := 1;
+
+dry := 0;
 
 gridchat: module
 {
@@ -49,8 +59,8 @@ tkcmds := array[] of {
 init(ctxt: ref Draw->Context, args: list of string)
 {
 	sys = load Sys Sys->PATH;
-	sh = load Sh Sh->PATH;
 	dial = load Dial Dial->PATH;
+	str = load String String->PATH;
 	tk = load Tk Tk->PATH;
 	tkclient = load Tkclient Tkclient->PATH;
 	tkclient->init();
@@ -65,7 +75,16 @@ init(ctxt: ref Draw->Context, args: list of string)
 	for (i := 0; i < len tkcmds; i++)
 		tkcmd(tkcmds[i]);
 
-	mountgridchat(ctxt);
+	tkcmd(sprint("bind .in <Key-%c> {.out yview scroll 0.5 page}", Keyboard->Down));
+	tkcmd(sprint("bind .in <Key-%c> {.out yview scroll -0.5 page}", Keyboard->Up));
+
+	if (!dry) {
+		cs = load Cs Cs->PATH;
+		cs->init(ctxt, nil);
+		if (verbose)
+			sys->fprint(sys->fildes(2), "Started ndb/cs\n");
+		mountgridchat();
+	}
 	preinit(args);
 
 	tkclient->onscreen(t, nil);
@@ -105,7 +124,8 @@ preinit(args: list of string)
 				verbose = 1;
 		}
 
-	filename = sprint("%s/%s", mountpoint, channel);
+	if (!dry)
+		filename = sprint("%s/%s", mountpoint, channel);
 
 	if (sys->open(filename, sys->ORDWR) == nil)
 		fail(sprint("error opening file %s for reading and writing", filename));
@@ -124,6 +144,8 @@ evalcmd(s: string)
 		msg := tkcmd(".in get");
 		if (msg == nil || msg == "")
 			return;
+		if (pretest(msg))
+			return;
 		if (nname == nil || nname == "" || nname == "nickname") {
 			sysnotice("please change your nick");
 			break;
@@ -137,6 +159,7 @@ evalcmd(s: string)
 			break;
 		if (nick != "nickname") {
 			writemsg(sprint("NICK> %s is now called %s\n", nick, nname));
+			nick = nname;
 			break;
 		}
 		nick = nname;
@@ -144,10 +167,68 @@ evalcmd(s: string)
 	}
 }
 
+pretest(s: string): int
+{
+	(n, args) := sys->tokenize(s, " ");
+	cmd := hd args;
+	args = tl args;
+	n--;
+	case cmd {
+	"/j" or "/join" =>
+		sysnotice("join command not implemented yet!");
+	"/aj" or "/autojump" or "/autoj" =>
+		if (n) {
+			(newaj, nil) := str->toint(hd args, 10);
+			autojump = newaj;
+		} else {
+			if (autojump) {
+				autojump = 0;
+			} else {
+				autojump = 1;
+			}
+		}
+		if (autojump)
+			sysnotice("autojump on");
+		else
+			sysnotice("autojump off");
+	"/p" or "/part" =>
+		if (nick == "nickname") {
+			sysnotice("no valid nick");
+			break;
+		}
+		if (n) {
+			writemsg(sprint("PART %s from chat (%s)\n", nick, str->quoted(args)));
+		} else {
+			writemsg(sprint("PART %s from chat\n", nick));
+		}
+		if (verbose)
+			sys->fprint(sys->fildes(2), "parted from chat\n");
+	"/c" or "/config" =>
+		sysnotice("printing config");
+		printconfig();
+		sysnotice("end of config");
+	* => return 0;
+	}
+	tkcmd(".in delete 0 end");
+	return 1;
+}
+
+printconfig()
+{
+	fmt: con "dry: %d\nautojump: %d\nnick: %s\nchannel: %s\nverbose: %d\n";
+	tkcmd(sprint(".out insert end {%s}",
+		sprint(fmt, dry, autojump, nick, channel, verbose)
+	));
+	if (verbose)
+		sys->fprint(sys->fildes(2), "printed current config\n");
+}
+
 sysnotice(s: string)
 {
 	msg := sprint("---> NOTE: %s <---\n", s);
 	tkcmd(sprint(".out insert end {%s}", msg));
+	if (autojump)
+		tkcmd(".out see end");
 	if (verbose)
 		sys->fprint(sys->fildes(2), "sysnotice: %s\n", msg);
 }
@@ -168,8 +249,11 @@ read_chat(fd: ref Sys->FD)
 {
 	buf := array[Sys->ATOMICIO] of byte;
 	dowarn = 0;
-	while (( n := sys->read(fd, buf, len buf)) > 0)
-		tkcmd(sprint(".out insert end {%s}; .out see end", string buf[:n]));
+	while (( n := sys->read(fd, buf, len buf)) > 0) {
+		tkcmd(sprint(".out insert end {%s}", string buf[:n]));
+		if (autojump)
+			tkcmd(".out see end");
+	}
 	if (n < 0)
 		fail(sprint("cannot read from file %s", filename));
 	dowarn = 1;
@@ -195,13 +279,8 @@ fail(s: string)
 }
 
 
-mountgridchat(ctxt: ref Draw->Context)
+mountgridchat()
 {
-	rtn := sh->system(ctxt, "ndb/cs");
-	if (rtn != nil || rtn != "")
-		fail(sprint("cannot start ndb/cs:\n%s", rtn));
-	if (verbose)
-		sys->fprint(sys->fildes(2), "started ndb/cs\n");
 	dest := dial->netmkaddr(gridaddress, "net", "styx");
 	c := dial->dial(dest, nil);
 	if (c == nil)
