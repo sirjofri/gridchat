@@ -34,6 +34,8 @@ verbose := 0;
 dowarn := 0;
 autojump := 1;
 
+version := "1.0";
+
 dry := 0;
 
 gridchat: module
@@ -207,17 +209,50 @@ pretest(s: string): int
 		sysnotice("printing config");
 		printconfig();
 		sysnotice("end of config");
+	"/h" or "/help" =>
+		sysnotice("help pages");
+		printhelp();
+		sysnotice("end of help");
 	* => return 0;
 	}
 	tkcmd(".in delete 0 end");
 	return 1;
 }
 
+printhelp()
+{
+	helpstr := array[] of {
+		("/h[elp]", "print this help page."),
+		(nil, nil),
+		("/autoj[ump]", "toggle autojump to last message."),
+		("or /aj", "optional arguments are 1|0."),
+		(nil, nil),
+		("/c[onfig]", "prints current configuration"),
+		(nil, nil),
+		("/p[art]", "print part message. use optional"),
+		("", "arguments to specify reason."),
+		(nil, nil),
+		("/j[oin]", "not implemented yet!"),
+	};
+	fmt: con "%-11s  : %s\n";
+	outstr := "";
+	for (i := 0; i < len helpstr; i++) {
+		(n, m) := helpstr[i];
+		if (n == nil) {
+			outstr += "\n";
+			continue;
+		}
+		outstr += sprint(fmt, n, m);
+	}
+
+	tkcmd(sprint(".out insert end {%s}", outstr));
+}
+
 printconfig()
 {
-	fmt: con "dry: %d\nautojump: %d\nnick: %s\nchannel: %s\nverbose: %d\n";
+	fmt: con "dry: %d\nautojump: %d\nnick: %s\nchannel: %s\nverbose: %d\nversion: %s\n";
 	tkcmd(sprint(".out insert end {%s}",
-		sprint(fmt, dry, autojump, nick, channel, verbose)
+		sprint(fmt, dry, autojump, nick, channel, verbose, version)
 	));
 	if (verbose)
 		sys->fprint(sys->fildes(2), "printed current config\n");
