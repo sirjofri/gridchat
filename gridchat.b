@@ -25,7 +25,7 @@ Cs: module
 t: ref Tk->Toplevel;
 wmctl: chan of string;
 
-gridaddress := "tcp!chat.9gridchan.org!9997";
+gridaddress := "tcp!chat.9p.zone!9990";
 mountpoint := "/n/chat";
 channel := "chat";
 filename := "/tmp/test";
